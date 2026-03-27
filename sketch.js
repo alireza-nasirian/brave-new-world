@@ -15,6 +15,11 @@ const INJURY_PER_BREAK = 0.18; // how much injury each breakup adds
 const INJURY_RECOVERY  = 0.00008; // per-frame injury recovery
 const TREMOR_THRESHOLD = 0.45; // injury level at which trembling starts
 
+// Regular particles stay within this hue band (cool blue-violet).
+// The solo is warm amber (42°) — visually opposite, instantly distinct.
+const REG_HUE_MIN = 195;
+const REG_HUE_MAX = 255;
+
 // ── Globals ───────────────────────────────────────────────────────────────────
 let regularParticles = [];
 let solo;
@@ -109,7 +114,7 @@ function spawnParticles() {
     let center = createVector(cx, cy);
 
     let angle = random(TWO_PI);
-    let hue = random(360);
+    let hue = random(REG_HUE_MIN, REG_HUE_MAX);
     let p1 = new RegularParticle(center, angle, hue);
     let p2 = new RegularParticle(center, angle + PI, hue);
     p1.partner = p2;
@@ -129,12 +134,22 @@ function scheduleNextReshuffle() {
 }
 
 function reshuffleCouples() {
-  // Pick 2 random distinct couples (4 particles) and cross-pair them
-  let coupled = regularParticles.filter(p => p.partner);
-  if (coupled.length < 4) {
-    scheduleNextReshuffle();
-    return;
+  // First: try to re-pair any lonely regular particles (abandoned when solo
+  // stole their partner). Pair them with each other or with a random single.
+  let lonely = regularParticles.filter(p => !p.partner);
+  while (lonely.length >= 2) {
+    // Pop two and pair them
+    let a = lonely.pop();
+    let b = lonely.pop();
+    let hue = random(REG_HUE_MIN, REG_HUE_MAX);
+    let newCenter = p5.Vector.lerp(a.pos, b.pos, 0.5);
+    a.reassign(b, newCenter, hue);
+    b.reassign(a, newCenter, hue);
   }
+
+  // Then do the usual cross-couple swap for variety
+  let coupled = regularParticles.filter(p => p.partner);
+  if (coupled.length < 4) { scheduleNextReshuffle(); return; }
 
   // Collect pair representatives (one per pair, avoid duplicates)
   let seen = new Set();
@@ -149,7 +164,7 @@ function reshuffleCouples() {
 
   if (pairs.length < 2) { scheduleNextReshuffle(); return; }
 
-  // Shuffle the list and take the first 2
+  // Shuffle and take first 2
   for (let i = pairs.length - 1; i > 0; i--) {
     let j = floor(random(i + 1));
     [pairs[i], pairs[j]] = [pairs[j], pairs[i]];
@@ -159,9 +174,9 @@ function reshuffleCouples() {
   let [b1, b2] = pairs[1];
 
   // Cross-pair: a1↔b1 and a2↔b2
-  // Choose one hue per new pair before reassigning so both particles share it
-  let hue1 = random(360);
-  let hue2 = random(360);
+  // New hues stay within the cool band so regular particles always look similar
+  let hue1 = random(REG_HUE_MIN, REG_HUE_MAX);
+  let hue2 = random(REG_HUE_MIN, REG_HUE_MAX);
   let newCenter1 = p5.Vector.lerp(a1.pos, b1.pos, 0.5);
   let newCenter2 = p5.Vector.lerp(a2.pos, b2.pos, 0.5);
 
@@ -234,6 +249,13 @@ function triggerSoloSeek() {
     }
   }
   if (!nearest) return;
+
+  // Strict 2-particle bond: release nearest's current partner first so no
+  // triangle forms. The abandoned particle wanders alone until reshuffled.
+  if (nearest.partner) {
+    nearest.partner.partner = null; // abandoned — now single
+    nearest.partner = null;
+  }
 
   solo.enterRelationship(nearest);
 }
@@ -434,6 +456,11 @@ class SoloParticle extends Particle {
     if (!this.bonded) return;
 
     playBreakSound();
+
+    // Free the ex-partner so they wander alone (reshuffle will re-pair them)
+    if (this.partner) {
+      this.partner.partner = null;
+    }
 
     this.bonded    = false;
     this.seeking   = false;
