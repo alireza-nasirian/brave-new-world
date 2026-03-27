@@ -25,24 +25,7 @@
       display: block;
     }
 
-    #hint {
-      position: fixed;
-      bottom: 24px;
-      left: 50%;
-      transform: translateX(-50%);
-      color: rgba(255, 255, 255, 0.28);
-      font-family: 'Georgia', serif;
-      font-size: 13px;
-      letter-spacing: 0.12em;
-      pointer-events: none;
-      text-align: center;
-      transition: opacity 2s ease;
-    }
-
-    #hint.hidden {
-      opacity: 0;
-    }
-
+    /* ── Persistent UI chrome ─────────────────────────────────────────────── */
     #title {
       position: fixed;
       top: 32px;
@@ -59,23 +42,299 @@
       text-shadow:
         0 0 40px rgba(220, 60, 60, 0.55),
         0 0 80px rgba(220, 60, 60, 0.25);
+      z-index: 10;
+    }
+
+    /* ── Story overlay ────────────────────────────────────────────────────── */
+    #story-overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(7, 8, 16, 0.86);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.9s ease;
+      z-index: 100;
+    }
+
+    #story-overlay.visible {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    #story-card {
+      max-width: 580px;
+      width: 90%;
+      text-align: center;
+      padding: 0 16px;
+    }
+
+    #story-act {
+      font-family: 'Georgia', serif;
+      font-size: 11px;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      color: rgba(180, 60, 60, 0.7);
+      margin-bottom: 18px;
+    }
+
+    #story-title {
+      font-family: 'Georgia', serif;
+      font-size: 32px;
+      font-weight: normal;
+      color: #cc3333;
+      letter-spacing: 0.08em;
+      margin-bottom: 28px;
+      line-height: 1.2;
+      text-shadow: 0 0 30px rgba(200, 50, 50, 0.5);
+    }
+
+    #story-body {
+      font-family: 'Georgia', serif;
+      font-size: 16px;
+      line-height: 1.85;
+      color: rgba(220, 215, 210, 0.82);
+      letter-spacing: 0.03em;
+      margin-bottom: 44px;
+      white-space: pre-line;
+    }
+
+    #story-cta {
+      font-family: 'Georgia', serif;
+      font-size: 12px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.35);
+      animation: ctaPulse 2.2s ease-in-out infinite;
+    }
+
+    @keyframes ctaPulse {
+      0%, 100% { opacity: 0.35; }
+      50%       { opacity: 0.75; }
+    }
+
+    /* Progress dots */
+    #story-progress {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 32px;
+    }
+
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: rgba(180, 60, 60, 0.25);
+      transition: background 0.4s ease;
+    }
+
+    .dot.filled {
+      background: rgba(200, 60, 60, 0.75);
     }
   </style>
 </head>
 <body>
   <div id="title">Brave New World</div>
-  <div id="hint">click or press space to connect</div>
+
+  <!-- Story overlay -->
+  <div id="story-overlay">
+    <div id="story-card">
+      <div id="story-act"></div>
+      <h2 id="story-title"></h2>
+      <div id="story-progress"></div>
+      <p id="story-body"></p>
+      <p id="story-cta"></p>
+    </div>
+  </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/addons/p5.sound.min.js"></script>
   <script src="sketch.js"></script>
 
   <script>
-    // Fade out the hint after 6 seconds
-    setTimeout(() => {
-      const hint = document.getElementById('hint');
-      if (hint) hint.classList.add('hidden');
-    }, 6000);
+    // ── Story acts ────────────────────────────────────────────────────────────
+    // Each act: { act, title, body, cta }
+    const ACTS = [
+      {
+        act: 'prologue',
+        title: 'Alone in a Crowded World',
+        body: `Look around you. Everyone has someone.
+
+They orbit each other in quiet circles — warm, close, unhurried. Watch how their colors match. Watch how they drift together as if gravity itself decided they belong.
+
+And then there is you. The red one. Different. Alone.
+
+It was not always like this. And it does not have to stay this way.
+
+Somewhere out there, in that sea of blue, is a connection waiting to be made. Maybe it will last. Maybe it will change everything.
+
+You won't know until you reach out.`,
+        cta: '— click or press space to reach out —'
+      },
+      {
+        act: 'act I',
+        title: 'Gone.',
+        body: `It ended before it truly began.
+
+That is the way of things now. Connections form like sparks — brilliant for a moment, then dark. No one stays. Everyone keeps moving, keeps orbiting, keeps finding the next person.
+
+You can see what it left behind: a ring around you, darker than before. A small dimming. Your steps feel heavier.
+
+They call it modern love. Fast. Frictionless. Disposable.
+
+But the others are still out there — still dancing, still looking. And somewhere in that movement is someone who might hold still, just long enough.
+
+It is worth trying again.`,
+        cta: '— click or press space to try again —'
+      },
+      {
+        act: 'act II',
+        title: 'Again.',
+        body: `Again.
+
+You are starting to see the pattern. They come close, they glow, and then they are gone — back into the drift, as if nothing happened. As if you were just a brief detour on the way to somewhere else.
+
+Your light is dimmer now. Your movement slower. The scars are real — you can see them, permanent rings that did not exist before.
+
+But giving up means an orbit alone. Forever watching the others find each other, reform, move on.
+
+The world keeps spinning. You keep breathing. And somewhere in that crowd is someone who is tired of the drift too.`,
+        cta: '— click or press space — one more time —'
+      },
+      {
+        act: 'act III',
+        title: 'Still Here.',
+        body: `Three times now.
+
+Three connections. Three endings. Three rings that mark you, that slow you, that dim the red that used to burn so bright.
+
+Maybe the others are not happier. Maybe they just look that way from the outside — always moving, always reforming, never stopping long enough to feel the loss.
+
+Or maybe the reaching itself is the point. Not the holding, but the act of moving toward someone. The choice to try, despite everything you already know.
+
+You are still here. Still red. Still you.
+
+That means something.`,
+        cta: '— click or press space to reach out again —'
+      },
+      {
+        act: 'act IV',
+        title: 'Why Do We Keep Trying?',
+        body: `Look at them. They swap and reform without hesitation — two particles that were strangers a moment ago, now orbiting each other like they were always meant to.
+
+No one notices the ones left behind. No one stops to ask why some connections last and others evaporate the moment they form.
+
+You are barely a glow now. A shadow of the brightness you started with. Your path is slower, uncertain, marked by everything that did not work out.
+
+And still — something in you moves toward them. Still wants to close the distance. Still believes, despite every reason not to, that this time might be different.
+
+That is not naivety. That is something rarer.`,
+        cta: '— click or press space — last chance —'
+      },
+      {
+        act: 'epilogue',
+        title: 'A Brave New World.',
+        body: `In a world engineered for connection, the loneliest thing is to keep reaching and keep losing.
+
+And yet you reached — again and again — not because it was safe, but because the alternative was standing still while everything moved around you.
+
+Look at what it cost. Look at the rings, the dimness, the slowed steps. Look at what remains: still red, still moving, still here.
+
+This is what it means to live in a world where love is brief and people are temporary. You do not become harder. You do not stop. You carry your wounds and you reach out anyway.
+
+That is not weakness.
+
+That is the bravest thing in the world.`,
+        cta: '— click or press space to begin again —'
+      }
+    ];
+
+    // ── Game state ────────────────────────────────────────────────────────────
+    let round = 0;
+    const MAX_ROUNDS = 5; // after 5 breakups → final act
+
+    const overlay  = document.getElementById('story-overlay');
+    const elAct    = document.getElementById('story-act');
+    const elTitle  = document.getElementById('story-title');
+    const elProg   = document.getElementById('story-progress');
+    const elBody   = document.getElementById('story-body');
+    const elCta    = document.getElementById('story-cta');
+
+    // Build progress dots (one per breakup round)
+    function buildDots() {
+      elProg.innerHTML = '';
+      for (let i = 0; i < MAX_ROUNDS; i++) {
+        const d = document.createElement('div');
+        d.className = 'dot' + (i < round ? ' filled' : '');
+        elProg.appendChild(d);
+      }
+    }
+
+    function showAct(index) {
+      window.storyInteractionBlocked = true;
+      const act = ACTS[Math.min(index, ACTS.length - 1)];
+
+      elAct.textContent   = act.act;
+      elTitle.textContent = act.title;
+      elBody.textContent  = act.body;
+      elCta.textContent   = act.cta;
+      buildDots();
+
+      // Hide progress dots on intro and epilogue (no dots needed)
+      elProg.style.display = (index === 0 || index >= MAX_ROUNDS) ? 'none' : 'flex';
+
+      overlay.classList.add('visible');
+    }
+
+    function dismissAct() {
+      overlay.classList.remove('visible');
+
+      // Wait for fade-out before unblocking interaction
+      setTimeout(() => {
+        window.storyInteractionBlocked = false;
+
+        if (round > MAX_ROUNDS) {
+          // Restart everything after epilogue
+          round = 0;
+          if (typeof window.restartSketch === 'function') window.restartSketch();
+          setTimeout(() => showAct(0), 200);
+        }
+      }, 950);
+    }
+
+    // ── Sketch callbacks ──────────────────────────────────────────────────────
+    window.onSoloBond = function () {
+      // Could be used for future bonding-specific narration
+    };
+
+    window.onSoloBreakup = function () {
+      round++;
+      // Brief delay so the shockwave animation plays out first
+      setTimeout(() => showAct(round <= MAX_ROUNDS ? round : MAX_ROUNDS), 1400);
+    };
+
+    // ── Input capture ─────────────────────────────────────────────────────────
+    // When overlay is visible, click / space dismiss it instead of triggering sketch
+    document.addEventListener('click', function () {
+      if (window.storyInteractionBlocked) dismissAct();
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === ' ' && window.storyInteractionBlocked) {
+        e.preventDefault();
+        dismissAct();
+      }
+    });
+
+    // ── Boot: show intro after p5 has had a moment to start ──────────────────
+    // storyInteractionBlocked starts true so the sketch won't respond before intro
+    window.storyInteractionBlocked = true;
+    window.addEventListener('load', function () {
+      setTimeout(() => showAct(0), 600);
+    });
   </script>
 </body>
 </html>

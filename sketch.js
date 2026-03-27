@@ -52,6 +52,13 @@ function setup() {
   scheduleNextReshuffle();
 }
 
+// Exposed for the story game manager to call on restart
+window.restartSketch = function () {
+  _uid = 0;
+  spawnParticles();
+  scheduleNextReshuffle();
+};
+
 // ── p5.js draw ────────────────────────────────────────────────────────────────
 function draw() {
   // Semi-transparent dark overlay → motion trails
@@ -235,6 +242,7 @@ function drawBond(posA, posB, hue, alpha, sw) {
 //  SOLO INTERACTION TRIGGER
 // ─────────────────────────────────────────────────────────────────────────────
 function triggerSoloSeek() {
+  if (window.storyInteractionBlocked) return; // story overlay is active
   startAudioIfNeeded();
   if (solo.bonded) return; // already in a relationship
 
@@ -447,6 +455,7 @@ class SoloParticle extends Particle {
     this.bondAlpha  = 0;
 
     playBondSound();
+    if (typeof window.onSoloBond === 'function') window.onSoloBond();
 
     // Schedule the breakup
     this.bondTimer = setTimeout(() => this.breakup(), BOND_DURATION);
@@ -456,6 +465,7 @@ class SoloParticle extends Particle {
     if (!this.bonded) return;
 
     playBreakSound();
+    if (typeof window.onSoloBreakup === 'function') window.onSoloBreakup();
 
     // Free the ex-partner so they wander alone (reshuffle will re-pair them)
     if (this.partner) {
