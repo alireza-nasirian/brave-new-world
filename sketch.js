@@ -413,12 +413,12 @@ class SoloParticle extends Particle {
   constructor(pos) {
     super(pos);
     this.r           = 7;
-    this.hue         = 42;   // warm amber — distinguished from cool-toned pairs
+    this.hue         = 0;    // red — starkly distinct from the cool-blue crowd
     this.injuryLevel = 0;    // 0 = healthy, 1 = completely faded
     this.bonded      = false;
     this.partner     = null;
     this.bondAlpha   = 0;
-    this.bondHue     = 42;
+    this.bondHue     = 0;
     this.bondTimer   = null;
 
     // Noise-based wandering
@@ -477,121 +477,144 @@ class SoloParticle extends Particle {
   update() {
     this.pulsePhase += 0.04;
 
+    // Speed cap shrinks as injury accumulates: fully injured → max speed is 30% of healthy
+    let health      = 1 - this.injuryLevel;
+    let speedScale  = lerp(0.30, 1.0, health);
+
     if (this.seeking && this.seekTarget) {
-      // Steer toward the target
       let desired = p5.Vector.sub(this.seekTarget.pos, this.pos);
       let d = desired.mag();
       if (d > 35) {
-        desired.setMag(3.2);
+        desired.setMag(3.2 * speedScale);
         this.vel.lerp(desired, 0.08);
-        this.vel.limit(3.5);
+        this.vel.limit(3.5 * speedScale);
         this.pos.add(this.vel);
       } else {
-        this.seeking = false; // arrived — now orbit together
+        this.seeking = false;
       }
-      // Fade bond in
       this.bondAlpha = min(55, this.bondAlpha + 2.5);
     } else if (this.bonded && this.partner) {
-      // Gentle shared orbit around the midpoint between them
-      let mid = p5.Vector.lerp(this.pos, this.partner.pos, 0.5);
+      let mid     = p5.Vector.lerp(this.pos, this.partner.pos, 0.5);
       let desired = p5.Vector.sub(mid, this.pos).mult(-1).rotate(HALF_PI);
-      desired.setMag(1.0);
+      desired.setMag(1.0 * speedScale);
       this.vel.lerp(desired, 0.05);
-      this.vel.limit(1.5);
+      this.vel.limit(1.5 * speedScale);
       this.pos.add(this.vel);
       this.bondAlpha = min(65, this.bondAlpha + 1.5);
     } else {
-      // Lonely wandering via Perlin noise
-      this.noiseOff += 0.007;
+      // Lonely wandering — noise steps slow down with injury
+      this.noiseOff += 0.007 * speedScale;
       let angle  = noise(this.noiseOff) * TWO_PI * 2;
-      let target = p5.Vector.fromAngle(angle).mult(1.5);
+      let target = p5.Vector.fromAngle(angle).mult(1.5 * speedScale);
       this.vel.lerp(target, 0.04);
 
-      // Trembling when heavily injured
+      // Trembling grows with injury level (but tremor magnitude is also slowed)
       if (this.injuryLevel > TREMOR_THRESHOLD) {
         let t = (this.injuryLevel - TREMOR_THRESHOLD) / (1 - TREMOR_THRESHOLD);
-        this.vel.add(p5.Vector.random2D().mult(t * 1.2));
+        this.vel.add(p5.Vector.random2D().mult(t * 1.8 * speedScale));
       }
-      this.vel.limit(2.2);
+      this.vel.limit(2.2 * speedScale);
       this.pos.add(this.vel);
       this.bondAlpha = max(0, this.bondAlpha - 4);
 
-      // Keep within canvas
       let m = 40;
       this.pos.x = constrain(this.pos.x, m, width  - m);
       this.pos.y = constrain(this.pos.y, m, height - m);
     }
 
-    // Breakup flash animation counter
     if (this.breaking) {
       this.breakFrames++;
-      if (this.breakFrames > 40) this.breaking = false;
+      if (this.breakFrames > 55) this.breaking = false;
     }
   }
 
   display() {
-    let inj      = this.injuryLevel;
-    let health   = 1 - inj;
+    let inj    = this.injuryLevel;
+    let health = 1 - inj;
 
-    // Base hue drifts toward grey as injury grows
-    let displayHue = this.hue;
-    let displaySat = lerp(0, 70, health);       // grey → amber
-    let displayBri = lerp(30, 100, health);     // dim → bright
+    // Color: vivid red when healthy → dark desaturated crimson when wounded
+    let displayHue = this.hue;                      // always 0 (red)
+    let displaySat = lerp(15, 85, health);           // near-grey → saturated red
+    let displayBri = lerp(22, 96, health);           // very dim → bright
 
-    // Pulse glow (suppressed by injury)
-    let pulse      = (sin(this.pulsePhase) * 0.5 + 0.5);
-    let glowRadius = lerp(14, 28, pulse) * health;
-    let glowAlpha  = lerp(0, 28, pulse)  * health;
+    // Pulse glow — completely smothered by heavy injury
+    let pulse      = sin(this.pulsePhase) * 0.5 + 0.5;
+    let glowRadius = lerp(10, 34, pulse) * health * health; // quadratic = collapses fast
+    let glowAlpha  = lerp(0, 42, pulse)  * health * health;
 
-    // Breakup flash: white ripple rings expanding outward
-    if (this.breaking) {
-      let t = this.breakFrames / 40;
-      let rippleR  = t * 55;
-      let rippleA  = (1 - t) * 70;
+    // ── Persistent wound scar ring (visible whenever injured) ─────────────
+    if (inj > 0.05) {
+      let scarR = this.r * lerp(1.8, 3.5, inj);
+      let scarA = lerp(0, 50, inj);
       noFill();
-      stroke(0, 0, 100, rippleA);
-      strokeWeight(1.2);
-      ellipse(this.pos.x, this.pos.y, rippleR * 2, rippleR * 2);
-      noStroke();
-
-      // Second ring
-      let r2 = (1 - t * 0.5) * 30;
-      stroke(displayHue, 40, 90, rippleA * 0.5);
-      ellipse(this.pos.x, this.pos.y, r2 * 2, r2 * 2);
+      stroke(displayHue, 70, 55, scarA);
+      strokeWeight(lerp(0.5, 2.0, inj));
+      ellipse(this.pos.x, this.pos.y, scarR * 2, scarR * 2);
       noStroke();
     }
 
-    // Outer glow halo
+    // ── Breakup shockwave: three expanding rings, strong and red ──────────
+    if (this.breaking) {
+      let t = this.breakFrames / 55;
+
+      // Ring 1 — fast white flash
+      let r1 = t * 75;
+      let a1 = (1 - t) * 85;
+      noFill();
+      stroke(0, 0, 100, a1);
+      strokeWeight(1.5);
+      ellipse(this.pos.x, this.pos.y, r1 * 2, r1 * 2);
+
+      // Ring 2 — slower red ring
+      let r2 = t * 48;
+      let a2 = (1 - t) * 65;
+      stroke(displayHue, 80, 90, a2);
+      strokeWeight(2.0);
+      ellipse(this.pos.x, this.pos.y, r2 * 2, r2 * 2);
+
+      // Ring 3 — tight dark contraction ring
+      let r3 = (1 - t * 0.6) * 20;
+      let a3 = (1 - t) * 45;
+      stroke(displayHue, 40, 50, a3);
+      strokeWeight(3.0);
+      ellipse(this.pos.x, this.pos.y, r3 * 2, r3 * 2);
+
+      noStroke();
+    }
+
+    // ── Outer glow halo ───────────────────────────────────────────────────
     if (glowRadius > 2) {
       noStroke();
-      fill(displayHue, displaySat * 0.7, displayBri, glowAlpha);
+      fill(displayHue, displaySat * 0.6, displayBri, glowAlpha);
       ellipse(this.pos.x, this.pos.y, glowRadius * 2, glowRadius * 2);
     }
 
-    // Mid halo ring (visible even with some injury)
-    let midA = lerp(0, 18, health) + pulse * 8 * health;
+    // ── Mid halo ──────────────────────────────────────────────────────────
+    let midA = lerp(0, 22, health) + pulse * 10 * health;
     noStroke();
     fill(displayHue, displaySat, displayBri, midA);
     ellipse(this.pos.x, this.pos.y, (this.r + 5) * 2, (this.r + 5) * 2);
 
-    // Core particle
-    let coreAlpha = lerp(20, 92, health);
+    // ── Core body ─────────────────────────────────────────────────────────
+    // Radius also shrinks slightly with injury — the particle "deflates"
+    let displayR  = lerp(this.r * 0.55, this.r, health);
+    let coreAlpha = lerp(28, 95, health);
     fill(displayHue, displaySat, displayBri, coreAlpha);
-    ellipse(this.pos.x, this.pos.y, this.r * 2, this.r * 2);
+    ellipse(this.pos.x, this.pos.y, displayR * 2, displayR * 2);
 
-    // When bonded: small bright inner dot
+    // ── Bright inner dot when bonded ──────────────────────────────────────
     if (this.bonded) {
-      fill(displayHue, 20, 100, 90 * health);
-      ellipse(this.pos.x, this.pos.y, this.r * 0.7, this.r * 0.7);
+      fill(displayHue, 15, 100, 92 * health);
+      ellipse(this.pos.x, this.pos.y, displayR * 0.55, displayR * 0.55);
     }
 
-    // When single and healthy: faint ring to signal availability
-    if (!this.bonded && inj < 0.5) {
-      let ringA = lerp(0, 22, 1 - inj * 2) * (sin(this.pulsePhase * 0.5) * 0.5 + 0.5);
-      stroke(displayHue, 30, 100, ringA);
-      strokeWeight(0.8);
+    // ── Loneliness ring when single and relatively healthy ────────────────
+    if (!this.bonded && inj < 0.6) {
+      let ringA = lerp(0, 28, 1 - inj / 0.6) * (sin(this.pulsePhase * 0.5) * 0.5 + 0.5);
+      stroke(displayHue, 55, 90, ringA);
+      strokeWeight(0.9);
       noFill();
-      ellipse(this.pos.x, this.pos.y, this.r * 5, this.r * 5);
+      ellipse(this.pos.x, this.pos.y, this.r * 5.5, this.r * 5.5);
       noStroke();
     }
   }
