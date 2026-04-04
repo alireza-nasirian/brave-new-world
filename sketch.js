@@ -5,21 +5,22 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── Constants ────────────────────────────────────────────────────────────────
-const NUM_PAIRS        = 18;   // regular coupled particles (×2)
+const NUM_PAIRS        = 200;   // regular coupled particles (×2)
 const COUPLE_ORBIT_R   = 28;   // base orbit radius around shared center
 const CENTER_DRIFT_SPD = 0.45; // how fast couple centers wander
 const RESHUFFLE_MIN    = 7000; // ms between reshuffles (min)
 const RESHUFFLE_MAX    = 13000;
-const BOND_DURATION    = 6500; // ms solo stays bonded before breakup
+const BOND_DURATION    = 8400; // ms solo stays bonded before breakup
 const INJURY_PER_BREAK = 0.18; // how much injury each breakup adds
 const INJURY_RECOVERY  = 0.00008; // per-frame injury recovery
 const TREMOR_THRESHOLD = 0.45; // injury level at which trembling starts
-
+const FLOCK_INTERVAL   = 9000; // ms between activations of the flock
+const FLOCK_DURATION   = 21000; // ms that lasts the flock
 // Regular particles stay within this hue band (cool blue-violet).
 // The solo is warm amber (42°) — visually opposite, instantly distinct.
 const REG_HUE_MIN = 195;
 const REG_HUE_MAX = 255;
-
+// WE ARE HERE!
 // ── Globals ───────────────────────────────────────────────────────────────────
 let regularParticles = [];
 let solo;
@@ -28,9 +29,20 @@ let bondOsc, bondEnv;
 let breakOsc, breakEnv;
 let audioStarted = false;
 
+let flockMode = false; // it says whether we are in flock mode or not
+let flockTimeout = null; // save the timer that turns off the flock
+let flockCycleTimeout = null; // save the timer that restarts the next cycle
+// ----- connect the audio to the flock
+let amplitudeAnalyzer;
+let fftAnalyzer;
+// smoothed values to avoid abrupt changes
+let musicLevel = 0;
+let bassEnergy = 0;
+let trebleEnergy = 0;
+
 // Particle uid counter
 let _uid = 0;
-
+// WE ARE... HERE!
 // ── p5.js preload ─────────────────────────────────────────────────────────────
 function preload() {
   // loadSound is async — use error callback so a missing file is gracefully skipped
@@ -40,7 +52,7 @@ function preload() {
     () => { bgMusic = null; }  // error: no file present — run without music
   );
 }
-
+// WE ... ARE... HERE!
 // ── p5.js setup ───────────────────────────────────────────────────────────────
 function setup() {
   createCanvas(windowWidth, windowHeight);
@@ -48,8 +60,13 @@ function setup() {
   angleMode(RADIANS);
 
   initSounds();
+
+  amplitudeAnalyzer = new p5.Amplitude();
+  fftAnalyzer = new p5.FFT(0.85, 1024);
+
   spawnParticles();
   scheduleNextReshuffle();
+  scheduleFlockMode();
 }
 
 // Exposed for the story game manager to call on restart
@@ -57,14 +74,17 @@ window.restartSketch = function () {
   _uid = 0;
   spawnParticles();
   scheduleNextReshuffle();
+  scheduleFlockMode();
 };
-
+// BANANA MOUSQUETAIRES!
 // ── p5.js draw ────────────────────────────────────────────────────────────────
 function draw() {
   // Semi-transparent dark overlay → motion trails
   noStroke();
   fill(240, 15, 5, 22);
   rect(0, 0, width, height);
+
+  updateAudioReactiveValues();
 
   // Update & draw regular particles + their bonds
   for (let p of regularParticles) p.update();
@@ -80,6 +100,7 @@ function draw() {
   if (solo.injuryLevel > 0) {
     solo.injuryLevel = max(0, solo.injuryLevel - INJURY_RECOVERY);
   }
+  drawAudioDebug();
 }
 
 // ── Window resize ─────────────────────────────────────────────────────────────
@@ -322,310 +343,96 @@ function playBreakSound() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  BASE PARTICLE CLASS
+//  FUNCTIONS OF THE FLOCKING CYCLE
 // ─────────────────────────────────────────────────────────────────────────────
-class Particle {
-  constructor(pos) {
-    this.id  = _uid++;
-    this.pos = pos.copy();
-    this.vel = createVector(0, 0);
-    this.hue = random(360);
-    this.r   = 5;
-  }
+function scheduleFlockMode() {
+  // limpia timers previos por si reinicias el sketch
+  if (flockTimeout) clearTimeout(flockTimeout);
+  if (flockCycleTimeout) clearTimeout(flockCycleTimeout);
 
-  update() {}
+  flockMode = false;
 
-  display() {
-    noStroke();
-    fill(this.hue, 50, 88, 80);
-    ellipse(this.pos.x, this.pos.y, this.r * 2, this.r * 2);
-  }
+  flockCycleTimeout = setTimeout(() => {
+    startFlockMode();
+  }, FLOCK_INTERVAL);
+}
+
+function startFlockMode() {
+  flockMode = true;
+
+  flockTimeout = setTimeout(() => {
+    stopFlockMode();
+  }, FLOCK_DURATION);
+}
+
+function stopFlockMode() {
+  flockMode = false;
+
+  flockCycleTimeout = setTimeout(() => {
+    startFlockMode();
+  }, FLOCK_INTERVAL);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  REGULAR PARTICLE  (always tries to be in a couple)
+//  FUNCTIONs FOR MUSIC
 // ─────────────────────────────────────────────────────────────────────────────
-class RegularParticle extends Particle {
-  constructor(center, angle, hue) {
-    super(center);
-    this.hue     = hue;
-    this.center  = center.copy();
-    this.angle   = angle;
-    this.orbitR  = COUPLE_ORBIT_R + random(-8, 8);
-    this.orbitSpd = random(0.006, 0.014) * (random(1) < 0.5 ? 1 : -1);
-    this.partner = null;
-    this.centerVel = p5.Vector.random2D().mult(CENTER_DRIFT_SPD * random(0.5, 1.5));
-    this.r = 4 + random(2);
-    this.noiseOff = random(1000);
+function updateAudioReactiveValues() {
+  // amplitud general
+  let rawLevel = amplitudeAnalyzer ? amplitudeAnalyzer.getLevel() : 0;
+
+  // espectro FFT
+  if (fftAnalyzer) {
+    fftAnalyzer.analyze();
   }
 
-  // Called during reshuffle to smoothly switch partners
-  reassign(newPartner, newCenter, sharedHue) {
-    this.partner   = newPartner;
-    this.center    = newCenter.copy();
-    this.centerVel = p5.Vector.random2D().mult(CENTER_DRIFT_SPD);
-    this.hue       = sharedHue;
-  }
+  let rawBass = fftAnalyzer ? fftAnalyzer.getEnergy("bass") / 255 : 0;
+  let rawTreble = fftAnalyzer ? fftAnalyzer.getEnergy("treble") / 255 : 0;
 
-  update() {
-    // Drift center with Perlin noise
-    this.noiseOff += 0.002;
-    let nx = noise(this.noiseOff, 0)       * 2 - 1;
-    let ny = noise(0, this.noiseOff + 500) * 2 - 1;
-    this.centerVel.add(createVector(nx, ny).mult(0.06));
-
-    // Soft attraction toward partner's center — keeps couple spatially coherent
-    if (this.partner) {
-      let pull = p5.Vector.sub(this.partner.center, this.center);
-      let pullDist = pull.mag();
-      if (pullDist > 15) {
-        pull.setMag(min(pullDist * 0.012, 0.18));
-        this.centerVel.add(pull);
-      }
-    }
-
-    this.centerVel.limit(CENTER_DRIFT_SPD);
-    this.center.add(this.centerVel);
-
-    // Soft-bounce at canvas edges
-    let m = 60;
-    if (this.center.x < m || this.center.x > width  - m) this.centerVel.x *= -1;
-    if (this.center.y < m || this.center.y > height - m) this.centerVel.y *= -1;
-    this.center.x = constrain(this.center.x, m, width  - m);
-    this.center.y = constrain(this.center.y, m, height - m);
-
-    // Orbit around center
-    this.angle += this.orbitSpd;
-    this.pos.x = this.center.x + cos(this.angle) * this.orbitR;
-    this.pos.y = this.center.y + sin(this.angle) * this.orbitR;
-  }
-
-  display() {
-    let a = this.partner ? 80 : 50;
-    noStroke();
-
-    // Soft outer glow
-    fill(this.hue, 45, 90, a * 0.25);
-    ellipse(this.pos.x, this.pos.y, this.r * 4.5, this.r * 4.5);
-
-    // Core
-    fill(this.hue, 50, 92, a);
-    ellipse(this.pos.x, this.pos.y, this.r * 2, this.r * 2);
-  }
+  // suavizado para evitar jitter
+  musicLevel = lerp(musicLevel, rawLevel, 0.12);
+  bassEnergy = lerp(bassEnergy, rawBass, 0.12);
+  trebleEnergy = lerp(trebleEnergy, rawTreble, 0.12);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  SOLO PARTICLE  (the protagonist)
-// ─────────────────────────────────────────────────────────────────────────────
-class SoloParticle extends Particle {
-  constructor(pos) {
-    super(pos);
-    this.r           = 7;
-    this.hue         = 0;    // red — starkly distinct from the cool-blue crowd
-    this.injuryLevel = 0;    // 0 = healthy, 1 = completely faded
-    this.bonded      = false;
-    this.partner     = null;
-    this.bondAlpha   = 0;
-    this.bondHue     = 0;
-    this.bondTimer   = null;
+function drawAudioDebug() {
+  let panelX = 20;
+  let panelY = 20;
+  let panelW = 220;
+  let lineH = 26;
+  let barW = 110;
+  let barH = 10;
 
-    // Noise-based wandering
-    this.noiseOff    = random(10000);
-    this.vel         = p5.Vector.random2D().mult(1.2);
+  push();
 
-    // Seek state: when triggered, gradually moves toward target
-    this.seeking     = false;
-    this.seekTarget  = null;
+  // fondo del panel
+  noStroke();
+  fill(0, 0, 0, 55);
+  rect(panelX - 10, panelY - 10, panelW, 110, 8);
 
-    // For breakup animation
-    this.breaking    = false;
-    this.breakFrames = 0;
+  fill(0, 0, 100, 90);
+  textSize(14);
+  textAlign(LEFT, CENTER);
 
-    // Pulse phase for the halo
-    this.pulsePhase  = random(TWO_PI);
-  }
+  // musicLevel
+  text(`musicLevel: ${nf(musicLevel, 1, 3)}`, panelX, panelY);
+  fill(200, 80, 100, 85);
+  rect(panelX + 95, panelY - 5, barW * constrain(musicLevel * 4, 0, 1), barH, 3);
 
-  enterRelationship(target) {
-    if (this.bonded) return;
-    this.bonded     = true;
-    this.seeking    = true;
-    this.seekTarget = target;
-    this.partner    = target;
-    this.bondHue    = target.hue;
-    this.bondAlpha  = 0;
+  // bassEnergy
+  fill(0, 0, 100, 90);
+  text(`bassEnergy: ${nf(bassEnergy, 1, 3)}`, panelX, panelY + lineH);
+  fill(35, 80, 100, 85);
+  rect(panelX + 95, panelY + lineH - 5, barW * constrain(bassEnergy, 0, 1), barH, 3);
 
-    playBondSound();
-    if (typeof window.onSoloBond === 'function') window.onSoloBond();
+  // trebleEnergy
+  fill(0, 0, 100, 90);
+  text(`trebleEnergy: ${nf(trebleEnergy, 1, 3)}`, panelX, panelY + lineH * 2);
+  fill(320, 60, 100, 85);
+  rect(panelX + 95, panelY + lineH * 2 - 5, barW * constrain(trebleEnergy, 0, 1), barH, 3);
 
-    // Schedule the breakup
-    this.bondTimer = setTimeout(() => this.breakup(), BOND_DURATION);
-  }
+  // estado flock
+  fill(0, 0, 100, 90);
+  text(`flockMode: ${flockMode ? "ON" : "OFF"}`, panelX, panelY + lineH * 3);
 
-  breakup() {
-    if (!this.bonded) return;
-
-    playBreakSound();
-    if (typeof window.onSoloBreakup === 'function') window.onSoloBreakup();
-
-    // Free the ex-partner so they wander alone (reshuffle will re-pair them)
-    if (this.partner) {
-      this.partner.partner = null;
-    }
-
-    this.bonded    = false;
-    this.seeking   = false;
-    this.partner   = null;
-    this.breaking  = true;
-    this.breakFrames = 0;
-
-    // Accumulate injury
-    this.injuryLevel = min(1, this.injuryLevel + INJURY_PER_BREAK);
-
-    if (this.bondTimer) { clearTimeout(this.bondTimer); this.bondTimer = null; }
-  }
-
-  update() {
-    this.pulsePhase += 0.04;
-
-    // Speed cap shrinks as injury accumulates: fully injured → max speed is 30% of healthy
-    let health      = 1 - this.injuryLevel;
-    let speedScale  = lerp(0.30, 1.0, health);
-
-    if (this.seeking && this.seekTarget) {
-      let desired = p5.Vector.sub(this.seekTarget.pos, this.pos);
-      let d = desired.mag();
-      if (d > 35) {
-        desired.setMag(3.2 * speedScale);
-        this.vel.lerp(desired, 0.08);
-        this.vel.limit(3.5 * speedScale);
-        this.pos.add(this.vel);
-      } else {
-        this.seeking = false;
-      }
-      this.bondAlpha = min(55, this.bondAlpha + 2.5);
-    } else if (this.bonded && this.partner) {
-      let mid     = p5.Vector.lerp(this.pos, this.partner.pos, 0.5);
-      let desired = p5.Vector.sub(mid, this.pos).mult(-1).rotate(HALF_PI);
-      desired.setMag(1.0 * speedScale);
-      this.vel.lerp(desired, 0.05);
-      this.vel.limit(1.5 * speedScale);
-      this.pos.add(this.vel);
-      this.bondAlpha = min(65, this.bondAlpha + 1.5);
-    } else {
-      // Lonely wandering — noise steps slow down with injury
-      this.noiseOff += 0.007 * speedScale;
-      let angle  = noise(this.noiseOff) * TWO_PI * 2;
-      let target = p5.Vector.fromAngle(angle).mult(1.5 * speedScale);
-      this.vel.lerp(target, 0.04);
-
-      // Trembling grows with injury level (but tremor magnitude is also slowed)
-      if (this.injuryLevel > TREMOR_THRESHOLD) {
-        let t = (this.injuryLevel - TREMOR_THRESHOLD) / (1 - TREMOR_THRESHOLD);
-        this.vel.add(p5.Vector.random2D().mult(t * 1.8 * speedScale));
-      }
-      this.vel.limit(2.2 * speedScale);
-      this.pos.add(this.vel);
-      this.bondAlpha = max(0, this.bondAlpha - 4);
-
-      let m = 40;
-      this.pos.x = constrain(this.pos.x, m, width  - m);
-      this.pos.y = constrain(this.pos.y, m, height - m);
-    }
-
-    if (this.breaking) {
-      this.breakFrames++;
-      if (this.breakFrames > 55) this.breaking = false;
-    }
-  }
-
-  display() {
-    let inj    = this.injuryLevel;
-    let health = 1 - inj;
-
-    // Color: vivid red when healthy → dark desaturated crimson when wounded
-    let displayHue = this.hue;                      // always 0 (red)
-    let displaySat = lerp(15, 85, health);           // near-grey → saturated red
-    let displayBri = lerp(22, 96, health);           // very dim → bright
-
-    // Pulse glow — completely smothered by heavy injury
-    let pulse      = sin(this.pulsePhase) * 0.5 + 0.5;
-    let glowRadius = lerp(10, 34, pulse) * health * health; // quadratic = collapses fast
-    let glowAlpha  = lerp(0, 42, pulse)  * health * health;
-
-    // ── Persistent wound scar ring (visible whenever injured) ─────────────
-    if (inj > 0.05) {
-      let scarR = this.r * lerp(1.8, 3.5, inj);
-      let scarA = lerp(0, 50, inj);
-      noFill();
-      stroke(displayHue, 70, 55, scarA);
-      strokeWeight(lerp(0.5, 2.0, inj));
-      ellipse(this.pos.x, this.pos.y, scarR * 2, scarR * 2);
-      noStroke();
-    }
-
-    // ── Breakup shockwave: three expanding rings, strong and red ──────────
-    if (this.breaking) {
-      let t = this.breakFrames / 55;
-
-      // Ring 1 — fast white flash
-      let r1 = t * 75;
-      let a1 = (1 - t) * 85;
-      noFill();
-      stroke(0, 0, 100, a1);
-      strokeWeight(1.5);
-      ellipse(this.pos.x, this.pos.y, r1 * 2, r1 * 2);
-
-      // Ring 2 — slower red ring
-      let r2 = t * 48;
-      let a2 = (1 - t) * 65;
-      stroke(displayHue, 80, 90, a2);
-      strokeWeight(2.0);
-      ellipse(this.pos.x, this.pos.y, r2 * 2, r2 * 2);
-
-      // Ring 3 — tight dark contraction ring
-      let r3 = (1 - t * 0.6) * 20;
-      let a3 = (1 - t) * 45;
-      stroke(displayHue, 40, 50, a3);
-      strokeWeight(3.0);
-      ellipse(this.pos.x, this.pos.y, r3 * 2, r3 * 2);
-
-      noStroke();
-    }
-
-    // ── Outer glow halo ───────────────────────────────────────────────────
-    if (glowRadius > 2) {
-      noStroke();
-      fill(displayHue, displaySat * 0.6, displayBri, glowAlpha);
-      ellipse(this.pos.x, this.pos.y, glowRadius * 2, glowRadius * 2);
-    }
-
-    // ── Mid halo ──────────────────────────────────────────────────────────
-    let midA = lerp(0, 22, health) + pulse * 10 * health;
-    noStroke();
-    fill(displayHue, displaySat, displayBri, midA);
-    ellipse(this.pos.x, this.pos.y, (this.r + 5) * 2, (this.r + 5) * 2);
-
-    // ── Core body ─────────────────────────────────────────────────────────
-    // Radius also shrinks slightly with injury — the particle "deflates"
-    let displayR  = lerp(this.r * 0.55, this.r, health);
-    let coreAlpha = lerp(28, 95, health);
-    fill(displayHue, displaySat, displayBri, coreAlpha);
-    ellipse(this.pos.x, this.pos.y, displayR * 2, displayR * 2);
-
-    // ── Bright inner dot when bonded ──────────────────────────────────────
-    if (this.bonded) {
-      fill(displayHue, 15, 100, 92 * health);
-      ellipse(this.pos.x, this.pos.y, displayR * 0.55, displayR * 0.55);
-    }
-
-    // ── Loneliness ring when single and relatively healthy ────────────────
-    if (!this.bonded && inj < 0.6) {
-      let ringA = lerp(0, 28, 1 - inj / 0.6) * (sin(this.pulsePhase * 0.5) * 0.5 + 0.5);
-      stroke(displayHue, 55, 90, ringA);
-      strokeWeight(0.9);
-      noFill();
-      ellipse(this.pos.x, this.pos.y, this.r * 5.5, this.r * 5.5);
-      noStroke();
-    }
-  }
+  pop();
 }
