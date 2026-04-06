@@ -155,6 +155,9 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/addons/p5.sound.min.js"></script>
+  <script src="particle.js"></script>
+  <script src="regularParticle.js"></script>
+  <script src="soloParticle.js"></script>
   <script src="sketch.js"></script>
 
   <script>
@@ -163,101 +166,80 @@
     const ACTS = [
       {
         act: 'prologue',
-        title: 'Alone in a Crowded World',
-        body: `Look around you. Everyone has someone.
+        title: 'Brave New World',
+        body: `Music: The lonely Shepherd by James Last Orchestra.
 
-They orbit each other in quiet circles — warm, close, unhurried. Watch how their colors match. Watch how they drift together as if gravity itself decided they belong.
+This artwork was inspired by the book "Brave New World" by Aldous Huxley, which explores a dystopian future where human connections are brief and superficial.
 
-And then there is you. The red one. Different. Alone.
+In this world no one is sad or stress or "alone". If you feel bad you can take a pill and will make you happy again.
 
-It was not always like this. And it does not have to stay this way.
+There are no limitations in the relationships, couples don't exist, because everyone can be with everyone else. You don't have to hold back your sexual desires.
 
-Somewhere out there, in that sea of blue, is a connection waiting to be made. Maybe it will last. Maybe it will change everything.
+In this world, "love" doesn't exist, or at least, the definition of "love" we have today.
 
-You won't know until you reach out.`,
+Families don't exist, people is created in labs. The feeling of motherhood, fatherhood or brotherhood doesn't exist.
+
+Hope is always there...`,
         cta: '— click or press space to reach out —'
       },
       {
         act: 'act I',
-        title: 'Gone.',
-        body: `It ended before it truly began.
+        title: 'The idea behind...',
+        body: `Nowadays relationships are more and more difficult to find.
 
-That is the way of things now. Connections form like sparks — brilliant for a moment, then dark. No one stays. Everyone keeps moving, keeps orbiting, keeps finding the next person.
+There are a lot of people just wanting to live the moment, where love is ephemeral, and connections are weak.
 
-You can see what it left behind: a ring around you, darker than before. A small dimming. Your steps feel heavier.
+People jumping from one relationship to another. The first moment they see a little of commitment, they choose to leave.
 
-They call it modern love. Fast. Frictionless. Disposable.
+However, there are still people wanting to create a real bond with someone else, with a person to share the life with.
 
-But the others are still out there — still dancing, still looking. And somewhere in that movement is someone who might hold still, just long enough.
+And of course life is not perfect like in the movies, good days will come as well as bad days.
 
-It is worth trying again.`,
+But that's where the challenge lies, to keep fighting, to be consistent.
+
+Because we believe in a better world...`,
         cta: '— click or press space to try again —'
       },
       {
         act: 'act II',
-        title: 'Again.',
-        body: `Again.
+        title: 'The red point...',
+        body: `That red point, red square, it can be anyone, struggling in life, trying to find a real connection, a person to grow with.
 
-You are starting to see the pattern. They come close, they glow, and then they are gone — back into the drift, as if nothing happened. As if you were just a brief detour on the way to somewhere else.
+Trying to be themselves and to find the right group that will accept them.
 
-Your light is dimmer now. Your movement slower. The scars are real — you can see them, permanent rings that did not exist before.
-
-But giving up means an orbit alone. Forever watching the others find each other, reform, move on.
-
-The world keeps spinning. You keep breathing. And somewhere in that crowd is someone who is tired of the drift too.`,
+In the meantime, life continues, don't stress, there is always one person for everyone.`,
         cta: '— click or press space — one more time —'
       },
       {
         act: 'act III',
-        title: 'Still Here.',
-        body: `Three times now.
+        title: 'Family and friends...',
+        body: `Being in a couple is not the only way to create a bond with someone. Family and friends are also important.
 
-Three connections. Three endings. Three rings that mark you, that slow you, that dim the red that used to burn so bright.
+Try to surround yourself with the people that really cares about you. It's not only in the good moments, but also in the bad moments.
 
-Maybe the others are not happier. Maybe they just look that way from the outside — always moving, always reforming, never stopping long enough to feel the loss.
-
-Or maybe the reaching itself is the point. Not the holding, but the act of moving toward someone. The choice to try, despite everything you already know.
-
-You are still here. Still red. Still you.
-
-That means something.`,
+we believe that everyone deserves to be loved...`,
         cta: '— click or press space to reach out again —'
-      },
-      {
-        act: 'act IV',
-        title: 'Why Do We Keep Trying?',
-        body: `Look at them. They swap and reform without hesitation — two particles that were strangers a moment ago, now orbiting each other like they were always meant to.
-
-No one notices the ones left behind. No one stops to ask why some connections last and others evaporate the moment they form.
-
-You are barely a glow now. A shadow of the brightness you started with. Your path is slower, uncertain, marked by everything that did not work out.
-
-And still — something in you moves toward them. Still wants to close the distance. Still believes, despite every reason not to, that this time might be different.
-
-That is not naivety. That is something rarer.`,
-        cta: '— click or press space — last chance —'
       },
       {
         act: 'epilogue',
         title: 'A Brave New World.',
-        body: `In a world engineered for connection, the loneliest thing is to keep reaching and keep losing.
+        body: `Look at them. They swap and reform without hesitation — two particles that were strangers a moment ago, now orbiting each other like they were always meant to.
 
-And yet you reached — again and again — not because it was safe, but because the alternative was standing still while everything moved around you.
 
-Look at what it cost. Look at the rings, the dimness, the slowed steps. Look at what remains: still red, still moving, still here.
+Instead of creating 1000 momories with 1000 different people, I choose to have 1000 memories with the same person.
 
-This is what it means to live in a world where love is brief and people are temporary. You do not become harder. You do not stop. You carry your wounds and you reach out anyway.
+And that moment will arrive, just be prepared.
 
-That is not weakness.
-
-That is the bravest thing in the world.`,
-        cta: '— click or press space to begin again —'
+Good luck.`,
+        cta: '— click or press space — last chance —'
       }
     ];
 
     // ── Game state ────────────────────────────────────────────────────────────
     let round = 0;
-    const MAX_ROUNDS = 5; // after 5 breakups → final act
+    const MAX_ROUNDS = 4; // after 5 breakups → final act
+    const INTERACTIONS_PER_ACT = 3;    // show poster every 5 breakups
+    let interactionCount = 0;          // total of accumulated breakups
 
     const overlay  = document.getElementById('story-overlay');
     const elAct    = document.getElementById('story-act');
@@ -302,6 +284,7 @@ That is the bravest thing in the world.`,
         if (round > MAX_ROUNDS) {
           // Restart everything after epilogue
           round = 0;
+          interactionCount = 0;
           if (typeof window.restartSketch === 'function') window.restartSketch();
           setTimeout(() => showAct(0), 200);
         }
@@ -314,9 +297,18 @@ That is the bravest thing in the world.`,
     };
 
     window.onSoloBreakup = function () {
-      round++;
-      // Brief delay so the shockwave animation plays out first
-      setTimeout(() => showAct(round <= MAX_ROUNDS ? round : MAX_ROUNDS), 1400);
+      interactionCount++;
+
+      // Show act only every N interactions
+      if (interactionCount % INTERACTIONS_PER_ACT === 0) {
+        round++;
+      
+        // if round <= MAX_ROUNDS, show the corresponding act
+        // if already passed, show the epilogue
+        setTimeout(() => {
+          showAct(round <= MAX_ROUNDS ? round : MAX_ROUNDS);
+        }, 1400);
+      }
     };
 
     // ── Input capture ─────────────────────────────────────────────────────────
