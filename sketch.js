@@ -5,7 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── Constants ────────────────────────────────────────────────────────────────
-const NUM_PAIRS        = 200;   // regular coupled particles (×2)
+const NUM_PAIRS        = 80;   // regular coupled particles (×2)
 const COUPLE_ORBIT_R   = 28;   // base orbit radius around shared center
 const CENTER_DRIFT_SPD = 0.45; // how fast couple centers wander
 const RESHUFFLE_MIN    = 7000; // ms between reshuffles (min)
