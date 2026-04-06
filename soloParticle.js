@@ -110,10 +110,17 @@ class SoloParticle extends Particle {
       this.vel.limit(2.2 * speedScale);
       this.pos.add(this.vel);
       this.bondAlpha = max(0, this.bondAlpha - 4);
+    }
 
-      let m = 40;
-      this.pos.x = constrain(this.pos.x, m, width  - m);
-      this.pos.y = constrain(this.pos.y, m, height - m);
+    // Always keep solo inside the canvas regardless of state (seeking / bonded / wandering)
+    const m = 40;
+    if (this.pos.x < m || this.pos.x > width - m) {
+      this.vel.x *= -1;
+      this.pos.x  = constrain(this.pos.x, m, width  - m);
+    }
+    if (this.pos.y < m || this.pos.y > height - m) {
+      this.vel.y *= -1;
+      this.pos.y  = constrain(this.pos.y, m, height - m);
     }
 
     if (this.breaking) {
