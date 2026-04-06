@@ -351,6 +351,31 @@ Good luck.`,
     window.addEventListener('load', function () {
       setTimeout(() => showAct(0), 600);
     });
+
+    // ── Idle reset: return to prologue after 3 minutes of no interaction ──────
+    const IDLE_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
+    let idleTimer = null;
+
+    function resetToStart() {
+      round = 0;
+      interactionCount = 0;
+      overlay.classList.remove('visible');
+      document.body.classList.remove('story-open');
+      if (typeof window.restartSketch === 'function') window.restartSketch();
+      setTimeout(() => showAct(0), 200);
+    }
+
+    function resetIdleTimer() {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(resetToStart, IDLE_TIMEOUT_MS);
+    }
+
+    ['mousemove', 'mousedown', 'keydown', 'touchstart', 'touchmove'].forEach(function (evt) {
+      document.addEventListener(evt, resetIdleTimer, { passive: true });
+    });
+
+    // Start the idle timer on page load
+    window.addEventListener('load', resetIdleTimer);
   </script>
 </body>
 </html>
